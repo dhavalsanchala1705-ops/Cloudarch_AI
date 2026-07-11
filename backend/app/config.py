@@ -19,7 +19,15 @@ class Settings(BaseSettings):
     @classmethod
     def parse_origins(cls, v):
         if isinstance(v, str):
+            v = v.strip()
             return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
+    @field_validator("database_url", "gemini_api_key", "aws_cognito_region", "aws_cognito_user_pool_id", "aws_cognito_app_client_id", "aws_s3_bucket_name", "aws_region", mode="before")
+    @classmethod
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
         return v
 
     class Config:
