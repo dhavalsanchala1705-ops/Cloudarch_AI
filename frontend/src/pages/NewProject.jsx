@@ -1,36 +1,57 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Loader2, Sparkles } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowLeft, ArrowRight, Loader2, Sparkles, Server, Shield, Users, Globe } from 'lucide-react'
 import { projectsApi } from '../services/api'
 import toast from 'react-hot-toast'
 
-const APP_TYPES = [
-  'Web Application',
-  'Mobile Backend',
-  'Data Pipeline',
-  'Machine Learning',
-  'E-commerce',
-  'SaaS Platform',
-  'IoT Application',
-  'Media Streaming',
-]
-
-const SCALE_OPTIONS = [
-  { value: 'startup', label: 'Startup', sub: '< 10k users' },
-  { value: 'growth', label: 'Growth', sub: '10k – 500k users' },
-  { value: 'enterprise', label: 'Enterprise', sub: '500k+ users' },
-]
-
 const REGIONS = [
-  'us-east-1 (N. Virginia)',
-  'us-west-2 (Oregon)',
-  'eu-west-1 (Ireland)',
-  'ap-southeast-1 (Singapore)',
-  'ap-northeast-1 (Tokyo)',
+  { value: 'us-east-1', label: 'us-east-1 (N. Virginia)' },
+  { value: 'us-west-2', label: 'us-west-2 (Oregon)' },
+  { value: 'eu-west-1', label: 'eu-west-1 (Ireland)' },
+  { value: 'ap-southeast-1', label: 'ap-southeast-1 (Singapore)' },
+  { value: 'ap-northeast-1', label: 'ap-northeast-1 (Tokyo)' },
 ]
 
-const STEPS = ['Project Info', 'Requirements', 'Review & Generate']
+const USER_OPTIONS = [
+  { value: '<1000', label: 'Startup', desc: 'Less than 1,000 monthly active users' },
+  { value: '1000-10000', label: 'Growth', desc: '1,000 to 10,000 monthly active users' },
+  { value: '>100000', label: 'Enterprise', desc: 'More than 100,000 monthly active users' },
+]
+
+const AVAILABILITY_OPTIONS = [
+  { value: 'best-effort', label: 'Best Effort', desc: 'Single AZ / non-critical availability' },
+  { value: '99.9%', label: '99.9% SLA', desc: 'Multi-AZ High Availability' },
+  { value: '99.99%', label: '99.99% SLA', desc: 'Multi-Region High Availability & DR' },
+]
+
+const DATABASE_OPTIONS = [
+  { value: 'relational', label: 'Relational SQL', desc: 'PostgreSQL, Aurora, MySQL' },
+  { value: 'nosql', label: 'NoSQL Key-Value', desc: 'DynamoDB, MongoDB' },
+  { value: 'both', label: 'Hybrid (SQL + NoSQL)', desc: 'Both relational and document DBs' },
+  { value: 'none', label: 'No Database', desc: 'Static or external API backend' },
+]
+
+const STORAGE_OPTIONS = [
+  { value: 'none', label: 'No Storage', desc: 'Simple compute only' },
+  { value: 'small (<10GB)', label: 'Small (<10GB)', desc: 'Images, assets, document uploads' },
+  { value: 'large (>1TB)', label: 'Large (>1TB)', desc: 'Large files, archives, block storage' },
+]
+
+const AUTH_OPTIONS = [
+  { value: 'email/password', label: 'Email / Password', desc: 'AWS Cognito User Pools' },
+  { value: 'social OAuth', label: 'Social OAuth', desc: 'Google, Apple, Facebook sign-in' },
+  { value: 'enterprise SSO', label: 'Enterprise SSO', desc: 'SAML / Enterprise integrations' },
+  { value: 'none', label: 'No Authentication', desc: 'Public application' },
+]
+
+const BUDGET_OPTIONS = [
+  { value: 'minimal (<$100/mo)', label: 'Minimal (<$100/mo)', desc: 'Optimize strictly for cost' },
+  { value: 'moderate ($100-1000/mo)', label: 'Moderate ($100-1000/mo)', desc: 'Balance HA and costs' },
+  { value: 'large (>$1000/mo)', label: 'Large (>$1000/mo)', desc: 'Performance and DR prioritized' },
+]
+
+const STEPS = ['Project Info', 'Scale & Resiliency', 'Data & Identity', 'Review & Generate']
 
 export default function NewProject() {
   const navigate = useNavigate()
@@ -40,268 +61,331 @@ export default function NewProject() {
   const [form, setForm] = useState({
     name: '',
     description: '',
-    appType: '',
-    scale: 'startup',
-    region: 'us-east-1 (N. Virginia)',
-    requirements: '',
-    budget: '',
-    compliance: [],
+    expected_users: '<1000',
+    availability_requirement: 'best-effort',
+    region: 'us-east-1',
+    database_needs: 'relational',
+    storage_needs: 'none',
+    auth_method: 'email/password',
+    budget: 'minimal (<$100/mo)',
   })
 
-  const update = (field) => (e) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }))
-
-  const toggleCompliance = (item) =>
-    setForm((f) => ({
-      ...f,
-      compliance: f.compliance.includes(item)
-        ? f.compliance.filter((c) => c !== item)
-        : [...f.compliance, item],
-    }))
+  const update = (field, value) => {
+    setForm((f) => ({ ...f, [field]: value }))
+  }
 
   const canNext = () => {
-    if (step === 0) return form.name.trim().length > 0 && form.description.trim().length > 0
-    if (step === 1) return form.appType !== ''
+    if (step === 0) return form.name.trim().length > 0 && form.description.trim().length >= 10
     return true
   }
 
   const handleSubmit = async () => {
     setCreating(true)
     try {
-      const payload = {
+      // 1. Create the project record
+      const createRes = await projectsApi.create({
         name: form.name,
         description: form.description,
-        questions: {
-          app_type: form.appType,
-          scale: form.scale,
-          region: form.region,
-          requirements: form.requirements,
-          budget: form.budget,
-          compliance: form.compliance,
-        },
-      }
-      const res = await projectsApi.create(payload)
-      const projectId = res.data?.id || res.data?.project_id
-      if (!projectId) throw new Error('No project ID returned')
-      toast.success('Project created! Generating architectures…')
-      // Fire generation immediately
+      })
+      const projectId = createRes.data?.id
+      if (!projectId) throw new Error('No project ID returned from backend')
+
+      // 2. Save the answers to the 7 clarifying questions
+      await projectsApi.updateQuestions(projectId, {
+        expected_users: form.expected_users,
+        budget: form.budget,
+        region: form.region,
+        availability_requirement: form.availability_requirement,
+        database_needs: form.database_needs,
+        storage_needs: form.storage_needs,
+        auth_method: form.auth_method,
+      })
+
+      toast.success('Project parameters saved!')
+
+      // 3. Trigger architecture generation
       await projectsApi.generate(projectId)
+      toast.success('AWS Architecture recommendations generated!')
       navigate(`/projects/${projectId}`)
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Failed to create project')
+      toast.error(err?.response?.data?.detail || err.message || 'Failed to create project')
       setCreating(false)
     }
   }
 
-  // ── Step renderers ──────────────────────────────────────────
+  // ── Step 0: Name & Description ────────────────────────────────
   const renderStep0 = () => (
     <div className="space-y-5">
       <div>
         <label className="label">Project Name *</label>
         <input
           type="text"
-          placeholder="e.g. My E-commerce Platform"
+          placeholder="e.g. My SaaS Portal"
           value={form.name}
-          onChange={update('name')}
-          className="input"
+          onChange={(e) => update('name', e.target.value)}
+          className="input font-medium text-white"
           maxLength={100}
         />
       </div>
       <div>
         <label className="label">What does your application do? *</label>
         <textarea
-          placeholder="Describe your application in a few sentences. Include the core functionality, who the users are, and any key technical constraints…"
+          placeholder="Describe your application. Explain the core features, targeted users, and any key performance requirements. (Minimum 10 characters)..."
           value={form.description}
-          onChange={update('description')}
+          onChange={(e) => update('description', e.target.value)}
           rows={5}
-          className="input resize-none"
+          className="input resize-none text-white leading-relaxed"
+          maxLength={5000}
         />
-        <p className="text-xs text-surface-200 mt-1.5">
-          {form.description.length} / 2000 characters
+        <p className="text-xs text-surface-200 mt-1.5 text-right font-mono">
+          {form.description.length} / 5000 characters (min 10)
         </p>
       </div>
     </div>
   )
 
+  // ── Step 1: Scale & Resiliency ────────────────────────────────
   const renderStep1 = () => (
     <div className="space-y-6">
-      {/* App type */}
       <div>
-        <label className="label">Application Type *</label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {APP_TYPES.map((type) => (
+        <label className="label flex items-center gap-2"><Users size={16} className="text-brand-400" /> Expected Users</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {USER_OPTIONS.map((opt) => (
             <button
-              key={type}
+              key={opt.value}
               type="button"
-              onClick={() => setForm((f) => ({ ...f, appType: type }))}
-              className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200 text-center ${
-                form.appType === type
-                  ? 'bg-brand-500/20 text-brand-400 border-brand-500/50'
+              onClick={() => update('expected_users', opt.value)}
+              className={`p-4 rounded-xl text-left border transition-all duration-200 ${
+                form.expected_users === opt.value
+                  ? 'bg-brand-500/10 text-brand-400 border-brand-500/50 shadow-lg'
                   : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600 hover:text-white'
               }`}
             >
-              {type}
+              <h4 className="font-bold text-sm">{opt.label}</h4>
+              <p className="text-xs opacity-75 mt-1 leading-normal">{opt.desc}</p>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Scale */}
       <div>
-        <label className="label">Expected Scale</label>
-        <div className="grid grid-cols-3 gap-3">
-          {SCALE_OPTIONS.map(({ value, label, sub }) => (
+        <label className="label flex items-center gap-2"><Server size={16} className="text-brand-400" /> Availability & SLA</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {AVAILABILITY_OPTIONS.map((opt) => (
             <button
-              key={value}
+              key={opt.value}
               type="button"
-              onClick={() => setForm((f) => ({ ...f, scale: value }))}
-              className={`px-4 py-3 rounded-xl border transition-all duration-200 text-center ${
-                form.scale === value
-                  ? 'bg-brand-500/20 text-brand-400 border-brand-500/50'
+              onClick={() => update('availability_requirement', opt.value)}
+              className={`p-4 rounded-xl text-left border transition-all duration-200 ${
+                form.availability_requirement === opt.value
+                  ? 'bg-brand-500/10 text-brand-400 border-brand-500/50 shadow-lg'
                   : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600 hover:text-white'
               }`}
             >
-              <p className="font-semibold text-sm">{label}</p>
-              <p className="text-xs opacity-70 mt-0.5">{sub}</p>
+              <h4 className="font-bold text-sm">{opt.label}</h4>
+              <p className="text-xs opacity-75 mt-1 leading-normal">{opt.desc}</p>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Region */}
       <div>
-        <label className="label">Preferred AWS Region</label>
-        <select value={form.region} onChange={update('region')} className="input">
+        <label className="label flex items-center gap-2"><Globe size={16} className="text-brand-400" /> Preferred AWS Region</label>
+        <select
+          value={form.region}
+          onChange={(e) => update('region', e.target.value)}
+          className="input text-white bg-surface-800"
+        >
           {REGIONS.map((r) => (
-            <option key={r} value={r}>{r}</option>
+            <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </select>
       </div>
+    </div>
+  )
 
-      {/* Budget */}
+  // ── Step 2: Data & Identity ──────────────────────────────────
+  const renderStep2 = () => (
+    <div className="space-y-6">
       <div>
-        <label className="label">Monthly Budget (optional)</label>
-        <input
-          type="text"
-          placeholder="e.g. $500/month or no limit"
-          value={form.budget}
-          onChange={update('budget')}
-          className="input"
-        />
-      </div>
-
-      {/* Compliance */}
-      <div>
-        <label className="label">Compliance Requirements (select all that apply)</label>
-        <div className="flex flex-wrap gap-2">
-          {['HIPAA', 'PCI-DSS', 'SOC 2', 'GDPR', 'FedRAMP', 'ISO 27001'].map((item) => (
+        <label className="label flex items-center gap-2"><Server size={16} className="text-brand-400" /> Database Needs</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {DATABASE_OPTIONS.map((opt) => (
             <button
-              key={item}
+              key={opt.value}
               type="button"
-              onClick={() => toggleCompliance(item)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                form.compliance.includes(item)
-                  ? 'bg-purple-500/20 text-purple-400 border-purple-500/50'
-                  : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600'
+              onClick={() => update('database_needs', opt.value)}
+              className={`p-4 rounded-xl text-left border transition-all duration-200 ${
+                form.database_needs === opt.value
+                  ? 'bg-brand-500/10 text-brand-400 border-brand-500/50 shadow-lg'
+                  : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600 hover:text-white'
               }`}
             >
-              {item}
+              <h4 className="font-bold text-sm">{opt.label}</h4>
+              <p className="text-xs opacity-75 mt-1 leading-normal">{opt.desc}</p>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Additional requirements */}
       <div>
-        <label className="label">Additional Requirements (optional)</label>
-        <textarea
-          placeholder="Any specific services, constraints, or preferences you'd like the AI to consider…"
-          value={form.requirements}
-          onChange={update('requirements')}
-          rows={3}
-          className="input resize-none"
-        />
-      </div>
-    </div>
-  )
-
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <p className="text-surface-200 text-sm">
-        Review your inputs before generating. The AI will produce three AWS architecture plans based on these details.
-      </p>
-      <div className="card bg-surface-800/50 space-y-3">
-        {[
-          { label: 'Project Name', value: form.name },
-          { label: 'Application Type', value: form.appType },
-          { label: 'Scale', value: form.scale },
-          { label: 'Region', value: form.region },
-          form.budget && { label: 'Budget', value: form.budget },
-          form.compliance.length > 0 && { label: 'Compliance', value: form.compliance.join(', ') },
-        ]
-          .filter(Boolean)
-          .map(({ label, value }) => (
-            <div key={label} className="flex justify-between text-sm gap-4">
-              <span className="text-surface-200 shrink-0">{label}</span>
-              <span className="text-white text-right">{value}</span>
-            </div>
+        <label className="label flex items-center gap-2"><Server size={16} className="text-brand-400" /> Storage Capacity</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {STORAGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => update('storage_needs', opt.value)}
+              className={`p-4 rounded-xl text-left border transition-all duration-200 ${
+                form.storage_needs === opt.value
+                  ? 'bg-brand-500/10 text-brand-400 border-brand-500/50 shadow-lg'
+                  : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600 hover:text-white'
+              }`}
+            >
+              <h4 className="font-bold text-sm">{opt.label}</h4>
+              <p className="text-xs opacity-75 mt-1 leading-normal">{opt.desc}</p>
+            </button>
           ))}
+        </div>
       </div>
-      <div className="divider" />
-      <p className="text-sm font-medium text-white">Description</p>
-      <p className="text-surface-200 text-sm leading-relaxed">{form.description}</p>
-      {form.requirements && (
-        <>
-          <p className="text-sm font-medium text-white">Additional Requirements</p>
-          <p className="text-surface-200 text-sm leading-relaxed">{form.requirements}</p>
-        </>
-      )}
+
+      <div>
+        <label className="label flex items-center gap-2"><Shield size={16} className="text-brand-400" /> Authentication Provider</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {AUTH_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => update('auth_method', opt.value)}
+              className={`p-4 rounded-xl text-left border transition-all duration-200 ${
+                form.auth_method === opt.value
+                  ? 'bg-brand-500/10 text-brand-400 border-brand-500/50 shadow-lg'
+                  : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600 hover:text-white'
+              }`}
+            >
+              <h4 className="font-bold text-sm">{opt.label}</h4>
+              <p className="text-xs opacity-75 mt-1 leading-normal">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 
-  const steps = [renderStep0, renderStep1, renderStep2]
+  // ── Step 3: Review & Generate ─────────────────────────────────
+  const renderStep3 = () => (
+    <div className="space-y-6">
+      <div>
+        <label className="label flex items-center gap-2">Monthly Budget Preference</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {BUDGET_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => update('budget', opt.value)}
+              className={`p-4 rounded-xl text-left border transition-all duration-200 ${
+                form.budget === opt.value
+                  ? 'bg-brand-500/10 text-brand-400 border-brand-500/50 shadow-lg'
+                  : 'bg-surface-800 text-surface-200 border-surface-700 hover:border-surface-600 hover:text-white'
+              }`}
+            >
+              <h4 className="font-bold text-sm">{opt.label}</h4>
+              <p className="text-xs opacity-75 mt-1 leading-normal">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="divider my-4 border-surface-850" />
+
+      <div className="card bg-surface-800/30 p-5 rounded-xl border border-surface-750 space-y-4">
+        <h3 className="text-sm font-semibold text-white uppercase tracking-wide">Summary of Parameters</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Project Name:</span>
+            <span className="text-white font-medium">{form.name}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Scale Users:</span>
+            <span className="text-white font-medium">{form.expected_users}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Availability Target:</span>
+            <span className="text-white font-medium">{form.availability_requirement}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Target Region:</span>
+            <span className="text-white font-medium">{form.region}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Database Needs:</span>
+            <span className="text-white font-medium">{form.database_needs}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Storage Needs:</span>
+            <span className="text-white font-medium">{form.storage_needs}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Auth Method:</span>
+            <span className="text-white font-medium">{form.auth_method}</span>
+          </div>
+          <div className="flex justify-between border-b border-surface-850 pb-2">
+            <span className="text-surface-200">Budget Limit:</span>
+            <span className="text-white font-medium">{form.budget}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const steps = [renderStep0, renderStep1, renderStep2, renderStep3]
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
         <button
           onClick={() => (step > 0 ? setStep(step - 1) : navigate('/dashboard'))}
-          className="btn-ghost mb-4 -ml-2"
+          className="btn-ghost mb-4 -ml-2 text-surface-200 hover:text-white"
         >
           <ArrowLeft size={16} /> {step > 0 ? 'Back' : 'Dashboard'}
         </button>
-        <h1 className="font-display text-3xl font-bold text-white">New Architecture Project</h1>
+        <h1 className="font-display text-3xl font-bold text-white">Configure AWS Cloud Architecture</h1>
         <p className="text-surface-200 text-sm mt-1">
           Step {step + 1} of {STEPS.length} — {STEPS[step]}
         </p>
       </div>
 
-      {/* Step progress */}
+      {/* Progress Bar */}
       <div className="flex gap-2 mb-8">
         {STEPS.map((s, i) => (
           <div
             key={s}
             className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              i <= step ? 'bg-brand-500' : 'bg-surface-800'
+              i <= step ? 'bg-brand-500 shadow-sm shadow-brand-500/20' : 'bg-surface-800'
             }`}
           />
         ))}
       </div>
 
-      {/* Form card */}
-      <motion.div
-        key={step}
-        initial={{ opacity: 0, x: 16 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.25 }}
-        className="card mb-6"
-      >
-        <h2 className="font-display text-xl font-bold text-white mb-6">{STEPS[step]}</h2>
-        {steps[step]()}
-      </motion.div>
+      {/* Form Card */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, x: 12 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -12 }}
+          transition={{ duration: 0.2 }}
+          className="card mb-6"
+        >
+          <h2 className="font-display text-xl font-bold text-white mb-6 border-b border-surface-850 pb-3">
+            {STEPS[step]}
+          </h2>
+          {steps[step]()}
+        </motion.div>
+      </AnimatePresence>
 
-      {/* Navigation buttons */}
+      {/* Navigation Buttons */}
       <div className="flex justify-end gap-3">
         {step < STEPS.length - 1 ? (
           <button
@@ -319,7 +403,7 @@ export default function NewProject() {
           >
             {creating ? (
               <>
-                <Loader2 size={16} className="animate-spin" /> Generating…
+                <Loader2 size={16} className="animate-spin" /> Generating AWS Architectures…
               </>
             ) : (
               <>

@@ -73,7 +73,7 @@ async def generate_architecture(
     """Call Gemini API and return validated architecture output. Retries once on validation failure."""
     genai.configure(api_key=settings.gemini_api_key)
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
+        model_name="gemini-2.5-flash",
         system_instruction=SYSTEM_PROMPT.format(price_table=get_price_table_text()),
     )
     user_prompt = build_user_prompt(project_description, questions)

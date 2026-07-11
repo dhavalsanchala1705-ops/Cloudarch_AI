@@ -15,6 +15,29 @@ const VIEWS = {
   RESET: 'reset',
 }
 
+const InputField = ({ icon: Icon, type = 'text', placeholder, value, onChange, right, showPwd, onTogglePwd }) => (
+  <div className="relative">
+    <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-200" />
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={onChange}
+      required
+      className="input pl-10 pr-10"
+    />
+    {right && (
+      <button
+        type="button"
+        onClick={onTogglePwd}
+        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-200 hover:text-white"
+      >
+        {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    )}
+  </div>
+)
+
 export default function AuthPage() {
   const navigate = useNavigate()
   const { loading, error, clearError, signIn, signUp, confirmSignUp, resendCode, forgotPassword, resetPassword } = useAuth()
@@ -91,30 +114,6 @@ export default function AuthPage() {
     } catch {}
   }
 
-  // ── Shared UI ─────────────────────────────────────────────
-  const InputField = ({ icon: Icon, type = 'text', placeholder, value, onChange, right }) => (
-    <div className="relative">
-      <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-200" />
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-        required
-        className="input pl-10 pr-10"
-      />
-      {right && (
-        <button
-          type="button"
-          onClick={() => setShowPwd(!showPwd)}
-          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-200 hover:text-white"
-        >
-          {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-        </button>
-      )}
-    </div>
-  )
-
   // ── Views ─────────────────────────────────────────────────
   const renderContent = () => {
     switch (view) {
@@ -122,7 +121,7 @@ export default function AuthPage() {
         return (
           <form onSubmit={handleSignIn} className="space-y-4">
             <InputField icon={Mail} type="email" placeholder="Email address" value={form.email} onChange={update('email')} />
-            <InputField icon={Lock} type={showPwd ? 'text' : 'password'} placeholder="Password" value={form.password} onChange={update('password')} right />
+            <InputField icon={Lock} type={showPwd ? 'text' : 'password'} placeholder="Password" value={form.password} onChange={update('password')} right showPwd={showPwd} onTogglePwd={() => setShowPwd(!showPwd)} />
             <button
               type="button"
               onClick={() => goTo(VIEWS.FORGOT)}
@@ -147,7 +146,7 @@ export default function AuthPage() {
           <form onSubmit={handleSignUp} className="space-y-4">
             <InputField icon={User} placeholder="Full name" value={form.name} onChange={update('name')} />
             <InputField icon={Mail} type="email" placeholder="Email address" value={form.email} onChange={update('email')} />
-            <InputField icon={Lock} type={showPwd ? 'text' : 'password'} placeholder="Password (min 8 chars)" value={form.password} onChange={update('password')} right />
+            <InputField icon={Lock} type={showPwd ? 'text' : 'password'} placeholder="Password (min 8 chars)" value={form.password} onChange={update('password')} right showPwd={showPwd} onTogglePwd={() => setShowPwd(!showPwd)} />
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center">
               {loading ? <Spinner size="sm" /> : 'Create Account'}
             </button>
@@ -216,7 +215,7 @@ export default function AuthPage() {
               required
               className="input"
             />
-            <InputField icon={Lock} type={showPwd ? 'text' : 'password'} placeholder="New password" value={form.newPassword} onChange={update('newPassword')} right />
+            <InputField icon={Lock} type={showPwd ? 'text' : 'password'} placeholder="New password" value={form.newPassword} onChange={update('newPassword')} right showPwd={showPwd} onTogglePwd={() => setShowPwd(!showPwd)} />
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center">
               {loading ? <Spinner size="sm" /> : 'Reset Password'}
             </button>
