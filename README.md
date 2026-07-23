@@ -2,6 +2,8 @@
 
 An AI-powered SaaS platform designed to automate the process of generating production-ready, secure, and optimized AWS infrastructure blueprints. By analyzing plain-language application descriptions and requirements, CloudArch AI instantly compiles tailored architecture topologies (Startup, Production, Enterprise Tiers) complete with visual node diagrams, estimated monthly costs, security guidelines, and step-by-step deployment tutorials.
 
+Live demo: https://d1aehhalapvmfv.cloudfront.net
+
 ---
 
 ## 💡 Tech Stack
